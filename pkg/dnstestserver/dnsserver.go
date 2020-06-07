@@ -17,6 +17,7 @@ type DNSServer struct {
 	l            logger.Logger
 	clientConfig *dns.ClientConfig
 	client       *dns.Client
+	started      chan bool
 	srv          *dns.Server
 }
 
@@ -25,17 +26,29 @@ func NewDNSServer(s *RRStore, address string) (*DNSServer, error) {
 	if err != nil {
 		return nil, err
 	}
+	started := make(chan bool)
 	return &DNSServer{
 		Address:      address,
 		s:            s,
 		l:            logger.NewStdLogger(),
 		clientConfig: cfg,
 		client:       &dns.Client{},
+		started:      started,
 		srv: &dns.Server{
-			Addr: address,
-			Net:  "udp",
+			Addr:              address,
+			Net:               "udp",
+			NotifyStartedFunc: func() { close(started) },
 		},
 	}, nil
+}
+
+// Started returns a channel that is closed when the DNSServer has started and is listening for connections.
+//
+// Started is provided for use in select statements
+//
+// Started can be used to ensure DNS requests are sent to a server only after it has been started.
+func (s *DNSServer) Started() chan bool {
+	return s.started
 }
 
 func (s *DNSServer) ListenAndServe() error {
