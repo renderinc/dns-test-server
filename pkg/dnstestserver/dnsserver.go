@@ -17,7 +17,7 @@ type DNSServer struct {
 	l            logger.Logger
 	clientConfig *dns.ClientConfig
 	client       *dns.Client
-	started      chan bool
+	started      chan struct{}
 	srv          *dns.Server
 }
 
@@ -26,7 +26,7 @@ func NewDNSServer(s *RRStore, address string) (*DNSServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	started := make(chan bool)
+	started := make(chan struct{})
 	return &DNSServer{
 		Address:      address,
 		s:            s,
@@ -47,7 +47,7 @@ func NewDNSServer(s *RRStore, address string) (*DNSServer, error) {
 // Started is provided for use in select statements
 //
 // Started can be used to ensure DNS requests are sent to a server only after it has been started.
-func (s *DNSServer) Started() chan bool {
+func (s *DNSServer) Started() <-chan struct{} {
 	return s.started
 }
 
