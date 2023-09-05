@@ -13,6 +13,7 @@ var notFound = errors.New("not found")
 
 type DNSServer struct {
 	Address      string
+	LocalOnly    bool
 	s            *RRStore
 	l            logger.Logger
 	clientConfig *dns.ClientConfig
@@ -44,7 +45,7 @@ func NewDNSServer(s *RRStore, address string) (*DNSServer, error) {
 
 // Started returns a channel that is closed when the DNSServer has started and is listening for connections.
 //
-// Started is provided for use in select statements
+// # Started is provided for use in select statements
 //
 // Started can be used to ensure DNS requests are sent to a server only after it has been started.
 func (s *DNSServer) Started() <-chan struct{} {
@@ -76,10 +77,10 @@ func (s *DNSServer) ServeDNS(wr dns.ResponseWriter, req *dns.Msg) {
 		for seen := map[string]bool{}; cname != "" && !seen[cname]; {
 			seen[cname] = true // avoid CNAME loops
 			r := s.s.Find(cname, dns.TypeCNAME)
-			if r == nil {
+			if len(r) == 0 {
 				break
 			}
-			cnameRR := r.(*dns.CNAME)
+			cnameRR := r[0].(*dns.CNAME)
 			cnameRRs = append(cnameRRs, cnameRR)
 			cname = cnameRR.Target
 		}
@@ -90,8 +91,24 @@ func (s *DNSServer) ServeDNS(wr dns.ResponseWriter, req *dns.Msg) {
 		return
 	} else if err != notFound {
 		s.l.Infof("error serving DNS from IMS: %v", err)
+	} else if s.LocalOnly {
+		s.nxdomain(wr, req)
+		return
 	}
 	s.serveDNSWithClient(cnameRRs, cnameForName, wr, req)
+}
+
+func (s *DNSServer) nxdomain(wr dns.ResponseWriter, req *dns.Msg) {
+	s.writeMsg(wr, &dns.Msg{
+		MsgHdr: dns.MsgHdr{
+			Id:                 req.Id,
+			Response:           true,
+			RecursionDesired:   req.RecursionDesired,
+			RecursionAvailable: true,
+			Rcode:              dns.RcodeNameError,
+		},
+		Question: req.Question,
+	})
 }
 
 func (s *DNSServer) serveDNSFromIMS(
@@ -108,11 +125,11 @@ func (s *DNSServer) serveDNSFromIMS(
 				name = cnameForName[name]
 			}
 		}
-		record := s.s.Find(name, q.Qtype)
-		if record == nil {
+		answers := s.s.Find(name, q.Qtype)
+		if len(answers) == 0 {
 			return notFound
 		}
-		records = append(records, record)
+		records = append(records, answers...)
 	}
 	s.writeMsg(wr, &dns.Msg{
 		MsgHdr: dns.MsgHdr{
