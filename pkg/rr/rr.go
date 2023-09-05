@@ -60,3 +60,15 @@ func NewCNAME(name, value string) *dns.CNAME {
 		Target: dns.Fqdn(value),
 	}
 }
+
+func NewCAA(name, tag, value string) *dns.CAA {
+	return &dns.CAA{
+		Hdr: dns.RR_Header{
+			Name:   dns.Fqdn(name),
+			Rrtype: dns.TypeCAA,
+			Class:  dns.ClassINET,
+		},
+		Tag:   tag,
+		Value: value,
+	}
+}

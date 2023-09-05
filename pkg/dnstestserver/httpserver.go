@@ -43,6 +43,8 @@ func (s *HTTPServer) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 	}
 	s.l.Infof("Serving HTTP request %s %s", method, req.RequestURI)
 
+	wr.Header().Set("Content-Type", "text/plain")
+
 	path := strings.TrimLeft(req.URL.Path, "/")
 	if path == "" {
 		if method == http.MethodHead {
@@ -78,12 +80,15 @@ func (s *HTTPServer) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 
 	switch method {
 	case http.MethodGet:
-		r := s.s.Find(name, recordType)
-		if r == nil {
+		rs := s.s.Find(name, recordType)
+		if len(rs) == 0 {
 			wr.WriteHeader(http.StatusNotFound)
 			return
 		}
-		_, _ = wr.Write([]byte(r.String()))
+		for _, r := range rs {
+			_, _ = wr.Write([]byte(r.String()))
+			_, _ = wr.Write([]byte("\n"))
+		}
 	case http.MethodPut:
 		v := req.URL.Query().Get("v")
 		if v == "" {
